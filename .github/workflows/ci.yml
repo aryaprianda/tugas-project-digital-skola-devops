@@ -2,7 +2,9 @@ name: DevSecOps CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - sesi30-devsecops
   pull_request:
 
 jobs:
