@@ -18,6 +18,8 @@ jobs:
           python-version: "3.10"
 
       - name: Install deps & run pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pip install -r requirements.txt -r dev-requirements.txt
           pytest
