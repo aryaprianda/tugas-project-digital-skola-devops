@@ -1,0 +1,77 @@
+name: DevSecOps CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  unit_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: |
+          pip install -r requirements.txt -r dev-requirements.txt
+          pytest
+
+  sast_bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pip install bandit
+          bandit -r app
+
+  sca_pip_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+          pip-audit -r dev-requirements.txt
+
+  secret_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+
+  build_and_push:
+    runs-on: ubuntu-latest
+    needs:
+      - unit_test
+      - sast_bandit
+      - sca_pip_audit
+      - secret_scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/notes-app:latest
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/notes-app:${{ github.sha }}
+
+  image_scan:
+    runs-on: ubuntu-latest
+    needs: build_and_push
+    steps:
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/notes-app:latest
+          severity: CRITICAL,HIGH
+          exit-code: 1
